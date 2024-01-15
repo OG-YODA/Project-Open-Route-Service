@@ -19,47 +19,57 @@ export class OrsReachTab extends LitElement {
     updated(changedProperties: Map<string, any>){
       super.updated(changedProperties);
 
-      if (changedProperties.has('rangeValue') || changedProperties.has('intervalValue')) {
-        // Ensure intervalValue is not greater than rangeValue
+      if (changedProperties.has('rangeValue')) {
         if (this.intervalValue > this.rangeValue) {
           this.intervalValue = this.rangeValue;
+        }
+    
+        const intervalSlider = this.shadowRoot?.querySelector('input#intervalSlider') as HTMLInputElement | null;
+        if (intervalSlider) {
+          intervalSlider.max = String(this.rangeValue);
+          
+          if (this.intervalValue > this.rangeValue) {
+            this.intervalValue = this.rangeValue;
+          }
         }
       }
     }
 
-    render(){
-        return html`
+    render() {
+      return html`
         <ors-search
-        id=${"searchReachCenter"}
-        .searchTerm=${this.reachCenterLabel}
-        .type=${"center"}
-        .label=${"Centrum izochrony:"}
+          id="searchReachCenter"
+          .searchTerm=${this.reachCenterLabel}
+          .type=${"center"}
+          .label=${"Centrum izochrony:"}
         ></ors-search>
         <div class="slider-container">
-        <p>Range</p>
-        <input
-          type="range"
-          min="1"
-          max="15"
-          step="1"
-          .value=${this.rangeValue}
-          @input=${(e: any) => (this.rangeValue = e.target.value)}
-        />
-        <p>Selected Value: ${this.rangeValue}</p>
-      </div>
-
-      <div class="slider-container">
-        <p>Interval</p>
-        <input
-          type="range"
-          min="1"
-          max=${this.rangeValue}
-          step="1"
-          .value=${this.intervalValue}
-          @input=${(e: any) => (this.intervalValue = e.target.value)}
-        />
-        <p>Selected Value: ${this.intervalValue}</p>
-      </div>`;
+          <p>Range</p>
+          <input
+            type="range"
+            min="1"
+            max="15"
+            step="1"
+            .value=${this.rangeValue}
+            @input=${(e: any) => (this.rangeValue = e.target.value)}
+          />
+          <p>Selected Value: ${this.rangeValue}</p>
+        </div>
+  
+        <div class="slider-container">
+          <p>Interval</p>
+          <input
+            type="range"
+            min="1"
+            max=${this.rangeValue}
+            step="1"
+            .value=${this.intervalValue}
+            @input=${(e: any) => (this.intervalValue = e.target.value)}
+            id="intervalSlider"
+          />
+          <p>Selected Value: ${this.intervalValue}</p>
+        </div>
+      `;
     }
     
     static styles? = css`
