@@ -4,34 +4,38 @@ import "@vaadin/tabs";
 import "@vaadin/tabsheet";
 import "@vaadin/text-field";
 import { LitElement, css, html } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { OrsMap } from "../ors-map/ors-map";
+import eventBus from "../../event/eventBus";
+import { customElement, property, state } from "lit/decorators.js";
 
 @customElement("ors-reach-tab")
 export class OrsReachTab extends LitElement {
     @property({ type: String }) reachCenterLabel: string = "";
-    @property({ type: Number }) rangeValue = 1;
+    @property({ type: Number }) rangeValue = 2;
     @property({ type: Number }) intervalValue = 1;
-
+    @state() orsMap?: OrsMap;
+    
     firstUpdated(props: any) {
         super.firstUpdated(props);
     }
 
-    updated(changedProperties: Map<string, any>){
+    updated(changedProperties: Map<string, any>) {
       super.updated(changedProperties);
-
-      if (changedProperties.has('rangeValue')) {
+    
+      if (changedProperties.has('rangeValue') || changedProperties.has('intervalValue')) {
+        this.intervalValue = Math.max(1, Math.min(10, this.intervalValue));
+        
         if (this.intervalValue > this.rangeValue) {
           this.intervalValue = this.rangeValue;
         }
+
+        this.dispatchEvent(new CustomEvent('rangeChange', { detail: this.rangeValue }));
+        this.dispatchEvent(new CustomEvent('intervalChange', { detail: this.intervalValue }));
     
-        const intervalSlider = this.shadowRoot?.querySelector('input#intervalSlider') as HTMLInputElement | null;
-        if (intervalSlider) {
-          intervalSlider.max = String(this.rangeValue);
-          
-          if (this.intervalValue > this.rangeValue) {
-            this.intervalValue = this.rangeValue;
-          }
-        }
+        eventBus.dispatch('update-reach-tab', {
+          range: this.rangeValue,
+          interval: this.intervalValue,
+        });
       }
     }
 
@@ -47,7 +51,7 @@ export class OrsReachTab extends LitElement {
           <p>Range</p>
           <input
             type="range"
-            min="1"
+            min="2"
             max="15"
             step="1"
             .value=${this.rangeValue}
@@ -61,7 +65,7 @@ export class OrsReachTab extends LitElement {
           <input
             type="range"
             min="1"
-            max=${this.rangeValue}
+            max="10"
             step="1"
             .value=${this.intervalValue}
             @input=${(e: any) => (this.intervalValue = e.target.value)}

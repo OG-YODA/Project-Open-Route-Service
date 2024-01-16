@@ -6,6 +6,7 @@ import { LitElement, css, html, render } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import eventBus from "../../event/eventBus";
 import { OrsApi } from "../../ors-api/ors-api";
+import { OrsReachTab } from "../ors-reach-tab/ors-reach-tab";
 import "../ors-custom-contextmenu";
 import "../ors-progress-bar";
 import markerIconGreen from "./assets/img/marker-icon-green.png";
@@ -15,6 +16,8 @@ import markerIconRed from "./assets/img/marker-icon-red.png";
 export class OrsMap extends LitElement {
   @state() map?: L.Map;
   @state() contextMenu?: L.Popup;
+  @state() rangeValue: number = 2;
+  @state() intervalValue: number = 1;
   @state() markerGreen?: L.Marker = new L.Marker([0, 0], {
     opacity: 0,
     draggable: true,
@@ -75,6 +78,26 @@ export class OrsMap extends LitElement {
     opacity: 0.65,
   };
 
+  @state() isochroneColors: string[] = [
+    '#2b83ba',
+    '#64abb0',
+    '#9dd3a7',
+    '#c7e9ad',
+    '#edf8b9',
+    '#ffedaa',
+    '#fec980',
+    '#f99e59',
+    '#e85b3a',
+    '#d7191c'
+  ];
+
+  @state() isochroneStyle = {
+    fillColor: '#2b83ba',
+    fillOpacity: 0.5,
+    color: '#2b83ba',
+    weight: 2,
+  };
+
   initMap = (): void => {
     this.map = new L.Map("map", {
       center: new L.LatLng(51.236525, 22.4998601),
@@ -127,32 +150,65 @@ export class OrsMap extends LitElement {
     );
   };
 
-  reachService = async (type?): Promise<void> =>{
-    console.log("reachService triggered")
-    if (this.markerCenter!.options.opacity === 1){
-      console.log("reachService started")
+  reachService = async (type?: string): Promise<void> => {
+    console.log("reachService triggered");
+    if (this.markerCenter!.options.opacity === 1) {
+      console.log("reachService started");
       try {
-        console.log("trying to reach with data")
+        console.log("trying to reach with data");
+        // Передайте rangeValue и intervalValue вместо параметров range и interval
         const feature = await this.orsApi.reach(
-          this.markerCenter!.getLatLng()
+          this.markerCenter!.getLatLng(), this.rangeValue, this.intervalValue
         );
         if ((feature as any).error) {
           throw new Error((feature as any).error.message);
         }
-
+  
         this.reachLayer!.clearLayers().addData(feature as any);
-        console.log("rendering")
-        render(html``, document.body);
+        console.log("rendering");
+        this.removeIsochroneLayer();
+        this.addIsochroneLayer(this.isochroneColors);
       } catch (e: any) {
         this.renderConnectionNotification(e);
       }
-    }else {
-      render(html``, document.body);
+    } else {
+      this.removeIsochroneLayer();
+    }
+  }
+  
+  removeIsochroneLayer(): void {
+    this.map?.eachLayer((layer) => {
+      if (layer instanceof L.GeoJSON) {
+        this.map?.removeLayer(layer);
+      }
+    });
+  }
+  
+  addIsochroneLayer(colors: string[]): void {
+    const geoJSON = this.reachLayer?.toGeoJSON() as any;
+    const layerCount = geoJSON?.features.length || 0;
+  
+    for (let i = 0; i < layerCount; i++) {
+      const color = i < colors.length ? colors[i] : "#ff0000";
+  
+      const isochroneLayer = L.geoJSON(geoJSON.features[i], {
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            fillOpacity: 0.6,
+          });
+        },
+        style: {
+          fillColor: color,
+          color: "#0000FF",
+          fillOpacity: 0.6,
+        },
+      });
+  
+      this.map?.addLayer(isochroneLayer);
     }
   }
 
   routeService = async (type?): Promise<void> => {
-    console.log("routeService triggered")
     if (
       this.markerGreen!.options.opacity === 1 &&
       this.markerRed!.options.opacity === 1
@@ -161,9 +217,7 @@ export class OrsMap extends LitElement {
         this.markerGreen!.getLatLng().distanceTo(this.markerRed!.getLatLng()) <
         700000
       ) {
-        console.log("routeService started")
         try {
-          console.log("trying to route with data")
           const feature = await this.orsApi.route(
             this.markerGreen!.getLatLng(),
             this.markerRed!.getLatLng()
@@ -173,7 +227,6 @@ export class OrsMap extends LitElement {
           }
 
           this.routeLayer!.clearLayers().addData(feature as any);
-          console.log("rendering")
           render(html``, document.body);
         } catch (e: any) {
           this.renderConnectionNotification(e);
@@ -185,7 +238,6 @@ export class OrsMap extends LitElement {
         this.routeLayer!.clearLayers();
         this.renderNotification();
       }
-      console.log("routeService ended")
     } else {
       render(html``, document.body);
     }
@@ -226,7 +278,7 @@ export class OrsMap extends LitElement {
       .openPopup();
   };
 
-  addListeners = (): void => {//при переміщенні
+  addListeners = (): void => {
     this.map!.on("contextmenu", (e: LeafletMouseEvent) => {
       this.currentLatLng = e.latlng;
       this.updateContextMenu();
@@ -248,11 +300,21 @@ export class OrsMap extends LitElement {
     this.markerCenter!.on("moveend", (e) => {
       this.currentLatLng = e.target.getLatLng();
       eventBus.dispatch("add-marker", { type: "center" });
-      console.log("marker center moved")
+      console.log("Marker moved on position: " + this.currentLatLng)
+      this.reachLayer?.clearLayers();
       this.reachService();
     });
 
-    eventBus.on("add-marker", async (data) => {//при  додаванні маркеру
+    eventBus.on('update-reach-tab', async (data) => {
+      // Обновляем значения в соответствии с переданными данными
+      this.rangeValue = data.range;
+      this.intervalValue = data.interval;
+  
+      // Вызываем функцию reachService с новыми значениями
+      this.reachService();
+    });
+
+    eventBus.on("add-marker", async (data) => {
       render(
         html`<progress-bar-request></progress-bar-request>`,
         document.body
@@ -291,12 +353,11 @@ export class OrsMap extends LitElement {
 
       this.contextMenu?.close();
       // this.currentLatLng = undefined;
-      console.log("add-marker routeService triggering")
       this.routeService(data.type);
       this.reachService(data.type);
     });
 
-    eventBus.on("add-marker-geocode", async (data) => {//при вводі адреси
+    eventBus.on("add-marker-geocode", async (data) => {
       const coords = new L.LatLng(data.coords[1], data.coords[0])!;
 
       switch (data.type) {
@@ -318,8 +379,8 @@ export class OrsMap extends LitElement {
       }
       this.contextMenu?.close();
       // this.currentLatLng = undefined;
-      console.log("add-marker-geocode routeService triggering")
       this.routeService(data.type);
+      this.reachService(data.type);
     });
 
     eventBus.on("hide-marker", async (data) => {
@@ -340,6 +401,7 @@ export class OrsMap extends LitElement {
       this.contextMenu?.close();
       // this.currentLatLng = undefined;
       this.routeLayer!.clearLayers();
+      this.reachLayer!.clearLayers();
     });
   };
 
@@ -354,6 +416,7 @@ export class OrsMap extends LitElement {
     this.markerRed?.addTo(this.map!).setIcon(this.endIcon);
     this.searchMarker?.addTo(this.map!).setIcon(this.startIcon);
     this.markerCenter?.addTo(this.map!).setIcon(this.centerIcon);
+    this.reachLayer!.setStyle(this.isochroneStyle).addTo(this.map!);
     this.addListeners();
   }
 

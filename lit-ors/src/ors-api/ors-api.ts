@@ -50,8 +50,8 @@ export class OrsApi {
   }
 
   async reach(center: L.LatLng,
-    range = 15000, 
-    interval = 3000): Promise<object> {
+    range: number, 
+    interval: number): Promise<object> {
     const { apiKey, reachServiceUrl } = config;
 
     const url: string = `${reachServiceUrl}`;
@@ -60,7 +60,7 @@ export class OrsApi {
       range: [range],
       interval: interval,
       range_type: "distance",
-      units: "m",
+      units: "km",
     };
 
     try {
